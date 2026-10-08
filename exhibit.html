@@ -69,7 +69,7 @@ button.suggested:disabled:hover { background: var(--accent); }
 
 /* ---- panneau lateral (reproduit les AdwPreferencesGroup d'Exhibit) ---- */
 #sidebar {
-  width: 300px; flex: none;
+  width: 360px; flex: none;
   display: flex; flex-direction: column;
   background: var(--bg);
   border-right: 1px solid var(--border);
@@ -77,7 +77,7 @@ button.suggested:disabled:hover { background: var(--accent); }
 #sidebar.hidden { display: none; }
 @media (max-width: 800px) {
   #sidebar {
-    position: absolute; inset: 0 auto 0 0; z-index: 20; width: 280px;
+    position: absolute; inset: 0 auto 0 0; z-index: 20; width: 320px;
     box-shadow: 8px 0 24px rgba(0,0,0,.3);
   }
 }
@@ -146,7 +146,7 @@ button.suggested:disabled:hover { background: var(--accent); }
   font: inherit; color: var(--text);
   background: color-mix(in srgb, var(--text) 8%, transparent);
   border: none; border-radius: 8px; padding: 5px 8px; cursor: pointer;
-  max-width: 150px;
+  max-width: 200px;
 }
 .combo-row select:hover { background: color-mix(in srgb, var(--text) 14%, transparent); }
 
@@ -168,7 +168,7 @@ button.suggested:disabled:hover { background: var(--accent); }
 /* repere d'orientation (haut droite) : second canvas WebGL, cf. app.js [6] */
 #axis-gizmo {
   position: absolute; top: 14px; right: 14px; z-index: 5;
-  width: 84px; height: 84px;
+  width: 190px; height: 190px;
   pointer-events: none;
 }
 
@@ -193,15 +193,26 @@ button.suggested:disabled:hover { background: var(--accent); }
   color: var(--dim); font-variant-numeric: tabular-nums;
 }
 
-/* selecteur de couleur (AdwActionRow + GtkColorDialogButton) */
-input[type=color] {
-  width: 38px; height: 28px; flex: none; padding: 0;
-  border: none; border-radius: 8px; background: none; cursor: pointer;
+/* palettes de couleurs predefinies */
+.palette {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end;
+  max-width: 168px;
 }
-input[type=color]:disabled { opacity: .4; cursor: default; }
-input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
-input[type=color]::-webkit-color-swatch { border: 1px solid var(--border); border-radius: 8px; }
-input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-radius: 8px; }
+.swatch {
+  width: 24px; height: 24px; min-width: 24px; padding: 0;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: var(--swatch); cursor: pointer;
+}
+.swatch.active { outline: 2px solid var(--accent); outline-offset: 2px; }
+.swatch:disabled { opacity: .35; cursor: default; }
+.model-row { flex-direction: column; align-items: stretch; gap: 8px; }
+.model-actions { display: flex; align-items: center; gap: 8px; width: 100%; }
+.model-actions .palette { flex: 1; justify-content: flex-start; max-width: none; }
+.model-actions button { flex: none; }
+.visibility-btn { min-width: 58px; padding: 5px 10px; font-size: 12px; }
+.visibility-btn.active { background: var(--accent); color: #fff; }
+.session-row { flex-direction: column; align-items: stretch; gap: 8px; }
+.session-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* barre d'onglets (AdwViewSwitcherBar) */
 #sidebar-tabs {
@@ -284,9 +295,27 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: var(--error); }
+
+/* ---- ecran de demarrage ---- */
+#boot {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: var(--bg, #f4f4f4); color: var(--dim, #777);
+  font: 600 14px sans-serif;
+  transition: opacity .25s;
+}
+#boot.hide { opacity: 0; pointer-events: none; }
+#boot .spinner {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 4px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: var(--accent, #3584e4);
+  animation: boot-spin .8s linear infinite;
+}
+@keyframes boot-spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
+<div id="boot"><div class="spinner"></div><div>Chargement d'Exhibit…</div></div>
 
 <header>
   <button id="sidebar-toggle" class="icon-btn" title="Afficher/masquer le panneau">
@@ -403,8 +432,8 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
           <div class="group-title">Matériau</div>
           <div class="group-card">
             <div class="row">
-              <div class="row-text"><span class="row-title">Couleur</span></div>
-              <input type="color" id="model-color" value="#b0b6bd">
+              <div class="row-text"><span class="row-title">Couleur globale</span></div>
+              <div class="palette" id="model-palette"></div>
             </div>
             <div class="row">
               <div class="row-text"><span class="row-title">Rugosité</span></div>
@@ -417,6 +446,14 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
               <button class="spin-btn" id="metal-minus" type="button">−</button>
               <span class="spin-value" id="metal-value">0.10</span>
               <button class="spin-btn" id="metal-plus" type="button">+</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="group-title">Pièces chargées</div>
+          <div class="group-card" id="model-list">
+            <div class="row">
+              <div class="row-text"><span class="row-sub">Aucun modèle chargé</span></div>
             </div>
           </div>
         </div>
@@ -435,7 +472,7 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
             </label>
             <div class="row">
               <div class="row-text"><span class="row-title">Couleur de grille</span></div>
-              <input type="color" id="grid-color" value="#808080">
+              <div class="palette" id="grid-palette"></div>
             </div>
             <div class="row combo-row">
               <div class="row-text"><span class="row-title">Plan</span></div>
@@ -462,7 +499,24 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
             </label>
             <div class="row">
               <div class="row-text"><span class="row-title">Couleur de fond</span></div>
-              <input type="color" id="bg-color" value="#1e1e1e" disabled>
+              <div class="palette" id="bg-palette"></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="group-title">Session</div>
+          <div class="group-card">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-title">Sauvegarde locale</span>
+                <span class="row-sub">Crée un point de reprise restaurable</span>
+              </div>
+              <button id="save-session" type="button">Sauvegarder</button>
+            </div>
+            <div id="saved-sessions">
+              <div class="row">
+                <div class="row-text"><span class="row-sub">Aucune sauvegarde</span></div>
+              </div>
             </div>
           </div>
         </div>
@@ -484,6 +538,28 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
               <button class="view-btn" id="view-x" type="button">X</button>
               <button class="view-btn" id="view-y" type="button">Y</button>
               <button class="view-btn" id="view-z" type="button">Z</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="group-title">Point de rotation</div>
+          <div class="group-card">
+            <div class="row combo-row">
+              <div class="row-text"><span class="row-title">Pivot</span></div>
+              <select id="pivot-select">
+                <option value="center" selected>Centre du modèle</option>
+                <option value="origin">Origine</option>
+                <option value="picked" id="pivot-picked-option" disabled hidden>Point choisi</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-title">Choisir sur le modèle</span>
+                <span class="row-sub">Double-clic, ou clic après armement</span>
+              </div>
+              <button class="icon-btn" id="pivot-pick" type="button" title="Choisir le point de rotation">
+                <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.6" fill="currentColor"/><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" stroke="currentColor" stroke-linecap="round"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -550,8 +626,8 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
     </div>
     <div id="empty">
       <div class="big">Aucun modèle</div>
-      <div>Glisser un fichier .stl, .obj, .vtk ou .vtu, ou cliquer sur Ouvrir</div>
-      <div>Rotation : clic gauche · Pan : clic droit · Zoom : molette · R : recadrer</div>
+      <div>Glisser un ou plusieurs fichiers .stl, .obj, .vtk ou .vtu, ou cliquer sur Ouvrir</div>
+      <div>Rotation libre : clic gauche · Rotation dans le plan écran : clic droit · Pan : clic milieu ou Maj+clic gauche · Zoom : molette · R : recadrer</div>
       <div>G : grille · E : arêtes · P : ortho/perspective · F11 : plein écran</div>
     </div>
     <div id="progress">
@@ -563,7 +639,7 @@ input[type=color]::-moz-color-swatch { border: 1px solid var(--border); border-r
 
 <div id="status">Prêt</div>
 <div id="toast" class="toast"></div>
-<input type="file" id="file" accept=".stl,.obj,.vtk,.vtu" style="display:none">
+<input type="file" id="file" accept=".stl,.obj,.vtk,.vtu" multiple style="display:none">
 
 <script>/* Three.js r185 - MIT - https://threejs.org */
 var THREE=(function(){
@@ -1265,11 +1341,15 @@ async function parseVTU(buf) {
 
 function Controls(camera, orthoCamera, dom, onChange) {
   var target = new THREE.Vector3();
-  var sph = new THREE.Spherical(10, Math.PI / 3, Math.PI / 4);
+  // Orientation libre (quaternion) : pas de blocage aux poles, contrairement
+  // a des coordonnees spheriques.
+  var quat = new THREE.Quaternion();
+  var sph = { radius: 10 };
   var pointers = {};            // id -> {x, y}
-  var mode = null;              // 'rotate' | 'pan'
+  var mode = null;              // 'rotate' | 'roll' | 'pan' | 'pinch'
   var lastPinch = 0;
   var v = new THREE.Vector3();
+  var rq = new THREE.Quaternion();
   var self = this;
   this.orthoBaseRadius = 10;
   this.orthoBaseHalfHeight = 5;
@@ -1278,17 +1358,37 @@ function Controls(camera, orthoCamera, dom, onChange) {
   // perspective ; seul son facteur de zoom traduit la distance (une camera
   // ortho ne "rapproche" pas avec la distance comme une perspective).
   function apply() {
-    sph.phi = Math.max(1e-4, Math.min(Math.PI - 1e-4, sph.phi));
     sph.radius = Math.max(1e-4, sph.radius);
-    v.setFromSpherical(sph);
+    quat.normalize();
+    v.set(0, 0, sph.radius).applyQuaternion(quat);
     camera.position.copy(target).add(v);
-    camera.lookAt(target);
+    camera.quaternion.copy(quat);
+    camera.updateMatrixWorld();
     orthoCamera.position.copy(camera.position);
-    orthoCamera.up.copy(camera.up);
-    orthoCamera.lookAt(target);
+    orthoCamera.quaternion.copy(quat);
     orthoCamera.zoom = self.orthoBaseRadius / sph.radius;
     orthoCamera.updateProjectionMatrix();
     if (onChange) onChange();
+  }
+
+  function setAngles(theta, phi) {
+    var dir = new THREE.Vector3().setFromSpherical(new THREE.Spherical(1, phi, theta));
+    var up = Math.abs(dir.y) > 0.999 ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(0, 1, 0);
+    var m = new THREE.Matrix4().lookAt(dir, new THREE.Vector3(), up);
+    quat.setFromRotationMatrix(m);
+  }
+
+  // Fait tourner la camera autour de la cible d'un angle autour d'un axe
+  // exprime dans le repere camera.
+  function rotateLocal(x, y, z, angle) {
+    var axis = new THREE.Vector3(x, y, z).applyQuaternion(quat);
+    rq.setFromAxisAngle(axis, angle);
+    quat.premultiply(rq);
+  }
+
+  function screenAngle(p) {
+    var r = dom.getBoundingClientRect();
+    return Math.atan2(p.y - (r.top + r.height / 2), p.x - (r.left + r.width / 2));
   }
 
   function ids() { return Object.keys(pointers); }
@@ -1303,13 +1403,16 @@ function Controls(camera, orthoCamera, dom, onChange) {
     dom.setPointerCapture(e.pointerId);
     pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
     if (ids().length === 2) { mode = 'pinch'; lastPinch = pinchDist(); }
-    else mode = (e.button === 0 && !e.shiftKey) ? 'rotate' : 'pan';
+    else if (e.button === 2 || (e.button === 0 && e.ctrlKey)) mode = 'roll';
+    else if (e.button === 1 || e.shiftKey) mode = 'pan';
+    else mode = 'rotate';
   });
 
   dom.addEventListener('pointermove', function (e) {
     var prev = pointers[e.pointerId];
     if (!prev) return;
     var dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    var prevAngle = screenAngle(prev);
     prev.x = e.clientX; prev.y = e.clientY;
 
     if (mode === 'pinch' && ids().length === 2) {
@@ -1319,8 +1422,17 @@ function Controls(camera, orthoCamera, dom, onChange) {
       apply();
 
     } else if (mode === 'rotate') {
-      sph.theta -= dx * 0.005;
-      sph.phi   -= dy * 0.005;
+      // horizontal : autour de l'axe vertical ecran ; vertical : autour de l'axe horizontal ecran
+      rotateLocal(0, 1, 0, -dx * 0.005);
+      rotateLocal(1, 0, 0, -dy * 0.005);
+      apply();
+
+    } else if (mode === 'roll') {
+      // rotation autour de l'axe de visee : la piece suit le curseur autour du centre
+      var da = screenAngle(prev) - prevAngle;
+      if (da > Math.PI) da -= 2 * Math.PI;
+      if (da < -Math.PI) da += 2 * Math.PI;
+      rotateLocal(0, 0, 1, da);
       apply();
 
     } else if (mode === 'pan') {
@@ -1348,6 +1460,8 @@ function Controls(camera, orthoCamera, dom, onChange) {
   }, { passive: false });
 
   dom.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  // evite le defilement automatique du navigateur au clic milieu
+  dom.addEventListener('mousedown', function (e) { if (e.button === 1) e.preventDefault(); });
 
   // Vues axiales (X/Y/Z) pour des prises de vue reproductibles : on ne touche
   // qu'aux angles, le rayon (zoom courant) est conserve tel quel.
@@ -1359,10 +1473,14 @@ function Controls(camera, orthoCamera, dom, onChange) {
   this.viewAxis = function (axis) {
     var a = AXIS_ANGLES[axis];
     if (!a) return;
-    sph.theta = a.theta;
-    sph.phi = a.phi;
+    setAngles(a.theta, a.phi);
     apply();
   };
+
+  // Point de rotation : change la cible sans toucher au rayon/angles, la
+  // camera se recadre donc autour du nouveau pivot (cf. panneau Camera, B9).
+  this.setTarget = function (p) { target.copy(p); apply(); };
+  this.getTarget = function () { return target.clone(); };
 
   this.frame = function (box) {
     var size = new THREE.Vector3(), c = new THREE.Vector3();
@@ -1370,7 +1488,7 @@ function Controls(camera, orthoCamera, dom, onChange) {
     var r = Math.max(size.x, size.y, size.z) * 0.5 || 1;
     target.copy(c);
     sph.radius = r / Math.sin(camera.fov * Math.PI / 360) * 1.6;
-    sph.theta = Math.PI / 4; sph.phi = Math.PI / 3;
+    setAngles(Math.PI / 4, Math.PI / 3);
     camera.near = sph.radius / 1000;
     camera.far = sph.radius * 100;
     camera.updateProjectionMatrix();
@@ -1380,6 +1498,7 @@ function Controls(camera, orthoCamera, dom, onChange) {
     orthoCamera.far = camera.far;
     apply();
   };
+  setAngles(Math.PI / 4, Math.PI / 3);
   apply();
 }
 
@@ -1387,6 +1506,7 @@ function Controls(camera, orthoCamera, dom, onChange) {
 
 var scene, camera, orthoCamera, activeCamera, renderer, controls;
 var grid, edges, ghost, currentMesh = null;
+var currentModels = [];
 var lastGridBox = null;
 var clipPlane;
 var hemiLight, keyLight, fillLight;
@@ -1418,8 +1538,13 @@ var view = {
   // coupe (B8)
   clipAxis: '',         // '' | 'x' | 'y' | 'z'
   clipPos: 0.5,         // position normalisee 0..1 dans la bbox
-  clipInvert: false
+  clipInvert: false,
+  // point de rotation (B9)
+  pivotMode: 'center'   // 'center' | 'origin' | 'picked'
 };
+var pivotPoint = null;     // THREE.Vector3, defini seulement en mode 'picked'
+var pickingPivot = false;  // vrai pendant l'attente du clic de pointage
+
 
 function initViewer() {
   var canvas = $('view');
@@ -1450,7 +1575,7 @@ function initViewer() {
   // initGizmo() avant Controls : le constructeur de Controls declenche un
   // premier apply()/render() synchrone, qui appelle deja renderGizmo().
   initGizmo();
-  controls = new Controls(camera, orthoCamera, canvas, render);
+  controls = new Controls(camera, orthoCamera, canvas, requestRender);
   window.addEventListener('resize', resize);
   resize();
 }
@@ -1479,18 +1604,18 @@ function makeAxisLabel(text, color) {
     map: new THREE.CanvasTexture(cnv), depthTest: false, sizeAttenuation: false
   });
   var sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0.32, 0.32, 1);
+  sprite.scale.set(0.4, 0.4, 1);
   return sprite;
 }
 
 function initGizmo() {
-  gizmoRenderer = new THREE.WebGLRenderer({ canvas: $('axis-gizmo'), antialias: true, alpha: true });
+  gizmoRenderer = new THREE.WebGLRenderer({ canvas: $('axis-gizmo'), antialias: true, alpha: true, preserveDrawingBuffer: true });
   gizmoRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  gizmoRenderer.setSize(84, 84, false);
+  gizmoRenderer.setSize(190, 190, false);
   gizmoRenderer.setClearColor(0x000000, 0);
 
   gizmoScene = new THREE.Scene();
-  gizmoCamera = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 10);
+  gizmoCamera = new THREE.OrthographicCamera(-1.75, 1.75, 1.75, -1.75, 0.1, 10);
   gizmoCamera.position.set(0, 0, 4);
   gizmoCamera.lookAt(0, 0, 0);
 
@@ -1502,16 +1627,26 @@ function initGizmo() {
     { dir: [0, 0, 1], color: 0x4a90d9, label: 'Z' }
   ].forEach(function (a) {
     var dir = new THREE.Vector3(a.dir[0], a.dir[1], a.dir[2]);
-    var geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(0.8)]);
-    gizmoGroup.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: a.color })));
+    var mat = new THREE.MeshBasicMaterial({ color: a.color });
+    var q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    var shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 20), mat);
+    shaft.quaternion.copy(q);
+    shaft.position.copy(dir).multiplyScalar(0.475);
+    gizmoGroup.add(shaft);
+    var head = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 24), mat);
+    head.quaternion.copy(q);
+    head.position.copy(dir).multiplyScalar(1.1);
+    gizmoGroup.add(head);
     var sprite = makeAxisLabel(a.label, a.color);
-    sprite.position.copy(dir).multiplyScalar(1.05);
+    sprite.position.copy(dir).multiplyScalar(1.38);
+    sprite.scale.set(0.56, 0.56, 1);
     gizmoGroup.add(sprite);
   });
 }
 
 function renderGizmo() {
-  gizmoGroup.quaternion.copy(activeCamera.quaternion);
+  // Les axes sont vus dans le repere camera : on applique l'inverse de son orientation.
+  gizmoGroup.quaternion.copy(activeCamera.quaternion).invert();
   gizmoRenderer.render(gizmoScene, gizmoCamera);
 }
 
@@ -1529,6 +1664,7 @@ function resize() {
 }
 
 function render() {
+  renderQueued = false;
   var bg = view.customBg ? view.bgColor :
     getComputedStyle(document.body).getPropertyValue('--view-bg').trim();
   renderer.setClearColor(bg, 1);
@@ -1536,12 +1672,40 @@ function render() {
   renderGizmo();
 }
 
-// Export de la vue courante en PNG (capture directe du canvas WebGL, aucune
-// dependance : Blob + <a download> declenchent le telechargement).
+// Un seul rendu par image ecran, meme si la souris envoie des centaines d'evenements.
+var renderQueued = false;
+function requestRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(render);
+}
+
+// Export de la vue courante en PNG : le trièdre est un second canvas overlay,
+// donc on compose les deux canvas avant de declencher le telechargement.
 function exportPNG() {
   if (!currentMesh) { toast('Aucun modele a exporter', true); return; }
   render();
-  renderer.domElement.toBlob(function (blob) {
+  var viewCanvas = renderer.domElement;
+  var gizmoCanvas = $('axis-gizmo');
+  var out = document.createElement('canvas');
+  out.width = viewCanvas.width;
+  out.height = viewCanvas.height;
+  var ctx = out.getContext('2d');
+  ctx.drawImage(viewCanvas, 0, 0);
+
+  var viewRect = viewCanvas.getBoundingClientRect();
+  var gizmoRect = gizmoCanvas.getBoundingClientRect();
+  var sx = out.width / viewRect.width;
+  var sy = out.height / viewRect.height;
+  ctx.drawImage(
+    gizmoCanvas,
+    (gizmoRect.left - viewRect.left) * sx,
+    (gizmoRect.top - viewRect.top) * sy,
+    gizmoRect.width * sx,
+    gizmoRect.height * sy
+  );
+
+  out.toBlob(function (blob) {
     if (!blob) { toast('Export PNG impossible', true); return; }
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -1604,22 +1768,237 @@ function applyMaterial() {
   // Colormap active : la couleur de base reste blanche pour ne pas teinter les
   // couleurs par sommet. Sinon, couleur unie du materiau.
   var colored = !!view.field && !!fieldInfo[view.field];
-  currentMesh.material.color.set(colored ? 0xffffff : view.matColor);
-  currentMesh.material.roughness = view.matRoughness;
-  currentMesh.material.metalness = view.matMetalness;
+  currentModels.forEach(function (model) {
+    model.mesh.material.color.set(model.mesh === currentMesh && colored ? 0xffffff : model.color);
+    model.mesh.material.roughness = view.matRoughness;
+    model.mesh.material.metalness = view.matMetalness;
+  });
+}
+
+function activeModel() {
+  for (var i = 0; i < currentModels.length; i++) {
+    if (currentModels[i].mesh === currentMesh) return currentModels[i];
+  }
+  return null;
+}
+
+function colorHex(value) {
+  return '#' + new THREE.Color(value).getHexString();
+}
+
+var MODEL_COLORS = ['#b0b6bd', '#1f6feb', '#d1242f', '#2da44e', '#bf8700', '#fb8500', '#8250df', '#14b8a6', '#24292f', '#ffffff'];
+var BG_COLORS = ['#1e1e1e', '#0b1020', '#111827', '#f6f7f8', '#ffffff', '#eef2f7', '#f7f1e3', '#202124'];
+var GRID_COLORS = ['#808080', '#5f6368', '#9aa0a6', '#c0c6cf', '#3b82f6', '#ef4444', '#22c55e', '#f59e0b'];
+
+function makeSwatch(color, active, onClick) {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'swatch' + (colorHex(color) === colorHex(active) ? ' active' : '');
+  btn.style.setProperty('--swatch', colorHex(color));
+  btn.title = colorHex(color);
+  btn.setAttribute('aria-label', 'Couleur ' + colorHex(color));
+  btn.addEventListener('click', function () { onClick(colorHex(color)); });
+  return btn;
+}
+
+function populatePalette(id, colors, active, onClick, disabled) {
+  var palette = $(id);
+  palette.innerHTML = '';
+  colors.forEach(function (color) {
+    var btn = makeSwatch(color, active, onClick);
+    btn.disabled = !!disabled;
+    palette.appendChild(btn);
+  });
+}
+
+function refreshFixedPalettes() {
+  populatePalette('model-palette', MODEL_COLORS, view.matColor, function (color) {
+    view.matColor = color;
+    currentModels.forEach(function (model) { model.color = color; });
+    refreshFixedPalettes();
+    populateModelList();
+    applyMaterial();
+    render();
+    scheduleSaveSession();
+  });
+  populatePalette('grid-palette', GRID_COLORS, view.gridColor, function (color) {
+    view.gridColor = color;
+    refreshFixedPalettes();
+    if (lastGridBox) setGrid(lastGridBox);
+    render();
+    scheduleSaveSession();
+  });
+  populatePalette('bg-palette', BG_COLORS, view.bgColor, function (color) {
+    view.bgColor = color;
+    view.customBg = true;
+    $('bg-switch').checked = true;
+    refreshFixedPalettes();
+    render();
+    scheduleSaveSession();
+  }, !view.customBg);
+}
+
+function populateModelList() {
+  var list = $('model-list');
+  list.innerHTML = '';
+  if (!currentModels.length) {
+    var emptyRow = document.createElement('div');
+    emptyRow.className = 'row';
+    var emptyText = document.createElement('div');
+    emptyText.className = 'row-text';
+    var sub = document.createElement('span');
+    sub.className = 'row-sub';
+    sub.textContent = 'Aucun modèle chargé';
+    emptyText.appendChild(sub);
+    emptyRow.appendChild(emptyText);
+    list.appendChild(emptyRow);
+    return;
+  }
+  currentModels.forEach(function (model, index) {
+    var row = document.createElement('div');
+    row.className = 'row model-row';
+    var text = document.createElement('div');
+    text.className = 'row-text';
+    var title = document.createElement('span');
+    title.className = 'row-title';
+    title.textContent = model.name;
+    text.appendChild(title);
+    var state = document.createElement('span');
+    state.className = 'row-sub';
+    state.textContent = model.visible === false ? 'Masquee' : 'Visible';
+    text.appendChild(state);
+    row.appendChild(text);
+    var actions = document.createElement('div');
+    actions.className = 'model-actions';
+    var visible = document.createElement('button');
+    visible.type = 'button';
+    visible.className = 'visibility-btn' + (model.visible === false ? '' : ' active');
+    visible.title = model.visible === false ? 'Afficher la piece' : 'Masquer la piece';
+    visible.textContent = model.visible === false ? 'Voir' : 'Masquer';
+    visible.addEventListener('click', function () {
+      model.visible = model.visible === false;
+      applyModelVisibility(model);
+      refreshModelScene(false);
+      scheduleSaveSession();
+    });
+    actions.appendChild(visible);
+    var palette = document.createElement('div');
+    palette.className = 'palette';
+    MODEL_COLORS.forEach(function (color) {
+      palette.appendChild(makeSwatch(color, model.color, function (picked) {
+        model.color = picked;
+        populateModelList();
+        applyMaterial();
+        render();
+        scheduleSaveSession();
+      }));
+    });
+    actions.appendChild(palette);
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.title = 'Retirer la piece';
+    remove.textContent = 'Retirer';
+    remove.addEventListener('click', function () { removeModel(model); });
+    actions.appendChild(remove);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+function visibleModels() {
+  return currentModels.filter(function (model) { return model.visible !== false; });
+}
+
+function applyModelVisibility(model) {
+  var visible = model.visible !== false;
+  model.mesh.visible = visible;
+  if (model.edges) model.edges.visible = visible && view.showEdges;
+  if (model.ghost) model.ghost.visible = visible && model.ghost.visible;
+}
+
+function removeModel(model) {
+  var idx = currentModels.indexOf(model);
+  if (idx < 0) return;
+  disposeModel(model);
+  currentModels.splice(idx, 1);
+  currentMesh = currentModels.length ? currentModels[currentModels.length - 1].mesh : null;
+  var active = currentModels.length ? currentModels[currentModels.length - 1] : null;
+  currentSurf = active ? active.surf : null;
+  edges = active ? active.edges : null;
+  ghost = active ? active.ghost : null;
+  refreshModelScene(false);
+  scheduleSaveSession();
+}
+
+function disposeModel(model) {
+  scene.remove(model.mesh);
+  model.mesh.geometry.dispose();
+  model.mesh.material.dispose();
+  if (model.edges) { scene.remove(model.edges); model.edges.geometry.dispose(); model.edges.material.dispose(); }
+  if (model.ghost) { scene.remove(model.ghost); model.ghost.geometry.dispose(); model.ghost.material.dispose(); }
+}
+
+function clearModels() {
+  currentModels.forEach(disposeModel);
+  currentModels = [];
+  currentMesh = null;
+  edges = null;
+  ghost = null;
+}
+
+function sceneModelsBox() {
+  var box = new THREE.Box3();
+  visibleModels().forEach(function (model) {
+    var b = model.mesh.geometry.boundingBox.clone();
+    b.translate(model.mesh.position);
+    box.union(b);
+  });
+  return box.isEmpty() ? null : box;
+}
+
+function currentModelInfo() {
+  var info = { nPoints: 0, nCells: 0 };
+  visibleModels().forEach(function (model) {
+    info.nPoints += model.info.nPoints;
+    info.nCells += model.info.nCells;
+  });
+  return info;
+}
+
+function refreshModelScene(frame) {
+  populateModelList();
+  if (!currentModels.length) { resetModelUI(); return; }
+  var box = sceneModelsBox();
+  if (box) {
+    setGrid(box);
+    if (frame) controls.frame(box);
+  } else if (grid) {
+    grid.visible = false;
+  }
+  var o = new THREE.Vector3();
+  var size = new THREE.Vector3();
+  if (box) { box.getCenter(o); box.getSize(size); }
+  var total = currentModelInfo();
+  var visibleCount = visibleModels().length;
+  var title = currentModels.length === 1 ? currentModels[0].name : currentModels.length + ' fichiers (' + currentModels.map(function (m) { return m.name; }).join(', ') + ')';
+  $('status').innerHTML =
+    '<b>' + title + '</b>' +
+    '<span>' + visibleCount + '/' + currentModels.length + ' visibles</span>' +
+    '<span>' + total.nPoints.toLocaleString('fr-FR') + ' noeuds</span>' +
+    '<span>' + total.nCells.toLocaleString('fr-FR') + ' cellules</span>' +
+    '<span>bbox ' + fmt(size.x) + ' x ' + fmt(size.y) + ' x ' + fmt(size.z) + '</span>' +
+    '<span>centre ' + fmt(o.x) + ', ' + fmt(o.y) + ', ' + fmt(o.z) + '</span>';
+  $('empty').style.display = 'none';
+  applyPivot();
+  render();
 }
 
 /* surf : MeshData APRES extraction de peau. info : meshInfo du maillage
    d'origine (avant peau), pour la barre d'etat. Les deux sont produits en
    amont par la section 8, dans le worker ou en repli synchrone.             */
-function showMesh(surf, name, info) {
-  if (currentMesh) {
-    scene.remove(currentMesh);
-    currentMesh.geometry.dispose();
-    currentMesh.material.dispose();
-  }
-  if (edges) { scene.remove(edges); edges.geometry.dispose(); edges.material.dispose(); edges = null; }
-  if (ghost) { scene.remove(ghost); ghost.geometry.dispose(); ghost.material.dispose(); ghost = null; }
+function showMesh(surf, name, info, append, opts) {
+  opts = opts || {};
+  if (!append) clearModels();
 
   // On conserve la peau (currentSurf) : la colormap y lit pointData / cellData.
   currentSurf = surf;
@@ -1629,34 +2008,35 @@ function showMesh(surf, name, info) {
     side: THREE.DoubleSide, flatShading: true
   });
   currentMesh = new THREE.Mesh(geo, mat);
+  currentMesh.position.copy(geo.userData.origin);
   scene.add(currentMesh);
 
   var edgesGeo = new THREE.EdgesGeometry(geo, 20);
   edges = new THREE.LineSegments(edgesGeo,
     new THREE.LineBasicMaterial({ color: 0x2e3436 }));
+  edges.position.copy(currentMesh.position);
   edges.visible = view.showEdges;
   scene.add(edges);
 
   // Fantome : contour du maillage NON deforme, en filaire translucide (B7).
   ghost = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20),
     new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3 }));
+  ghost.position.copy(currentMesh.position);
   ghost.visible = false;
   scene.add(ghost);
 
-  setGrid(geo.boundingBox);
-  controls.frame(geo.boundingBox);
+  var model = {
+    name: name, info: info, surf: surf, mesh: currentMesh,
+    edges: edges, ghost: ghost,
+    color: colorHex(opts.color || view.matColor),
+    visible: opts.visible !== false
+  };
+  currentModels.push(model);
+  applyModelVisibility(model);
+  applyMaterial();
+  refreshModelScene(true);
+  resetPivotUI();
   resize();
-
-  var o = geo.userData.origin;
-  var size = new THREE.Vector3();
-  geo.boundingBox.getSize(size);
-  $('status').innerHTML =
-    '<b>' + name + '</b>' +
-    '<span>' + info.nPoints.toLocaleString('fr-FR') + ' noeuds</span>' +
-    '<span>' + info.nCells.toLocaleString('fr-FR') + ' cellules</span>' +
-    '<span>bbox ' + fmt(size.x) + ' x ' + fmt(size.y) + ' x ' + fmt(size.z) + '</span>' +
-    '<span>centre ' + fmt(o.x) + ', ' + fmt(o.y) + ', ' + fmt(o.z) + '</span>';
-  $('empty').style.display = 'none';
 
   // Champs disponibles -> selecteur ; nouvelle piece = retour couleur unie.
   collectFields(surf);
@@ -1687,15 +2067,15 @@ function closeModel() {
   // touche N. Fermer en cours de route laisserait le worker ecrire ensuite.
   if (loading || !currentMesh) return;
 
-  scene.remove(currentMesh);
-  currentMesh.geometry.dispose();
-  currentMesh.material.dispose();
-  currentMesh = null;
+  clearModels();
+  resetModelUI();
+  scheduleSaveSession();
+}
 
-  if (edges) { scene.remove(edges); edges.geometry.dispose(); edges.material.dispose(); edges = null; }
-  if (ghost) { scene.remove(ghost); ghost.geometry.dispose(); ghost.material.dispose(); ghost = null; }
+function resetModelUI() {
   if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); grid = null; }
   lastGridBox = null;
+  resetPivotUI();
 
   currentSurf = null;
   fieldInfo = {};
@@ -1712,6 +2092,8 @@ function closeModel() {
   view.clipAxis = '';
   $('clip-select').value = '';
   updateClipRows();
+
+  populateModelList();
 
   $('status').innerHTML = '';
   $('empty').style.display = '';
@@ -1843,7 +2225,8 @@ function applyColormap() {
   if (!view.field || !fieldInfo[view.field]) {         // couleur unie
     if (geo.getAttribute('color')) geo.deleteAttribute('color');
     mat.vertexColors = false;
-    mat.color.set(view.matColor);
+    var model = activeModel();
+    mat.color.set(model ? model.color : view.matColor);
     mat.needsUpdate = true;
     $('legend').classList.remove('show');
     render();
@@ -1991,7 +2374,10 @@ function applyClip() {
   if (!view.clipAxis) {
     planes = [];
   } else {
-    var bb = currentMesh.geometry.boundingBox, axis = view.clipAxis;
+    var bb = sceneModelsBox(), axis = view.clipAxis;
+    if (!bb) {
+      planes = [];
+    } else {
     var coord = bb.min[axis] + view.clipPos * (bb.max[axis] - bb.min[axis]);
     var sign = view.clipInvert ? -1 : 1;
     // On garde la moitie ou normal . p + constant > 0.
@@ -1999,11 +2385,77 @@ function applyClip() {
                          axis === 'z' ? 1 : 0).multiplyScalar(sign);
     clipPlane.constant = -coord * sign;
     planes = [clipPlane];
+    }
   }
   // Basculer entre 0 et 1 plan change le shader : needsUpdate obligatoire.
-  [currentMesh.material, edges && edges.material, ghost && ghost.material]
-    .forEach(function (m) { if (m) { m.clippingPlanes = planes; m.needsUpdate = true; } });
+  currentModels.forEach(function (model) {
+    [model.mesh.material, model.edges && model.edges.material, model.ghost && model.ghost.material]
+      .forEach(function (m) { if (m) { m.clippingPlanes = planes; m.needsUpdate = true; } });
+  });
   render();
+}
+
+/* Point de rotation (B9) : centre du modele, origine ou point pointe sur le
+   maillage. Ne change que la cible de Controls, ni le rayon ni les angles,
+   de sorte que la rotation autour du nouveau pivot reste immediate. */
+function applyPivot() {
+  if (!currentMesh) return;
+  if (view.pivotMode === 'origin') {
+    controls.setTarget(new THREE.Vector3(0, 0, 0));
+  } else if (view.pivotMode === 'picked' && pivotPoint) {
+    controls.setTarget(pivotPoint);
+  } else {
+    var c = new THREE.Vector3();
+    var box = sceneModelsBox();
+    if (!box) return;
+    box.getCenter(c);
+    controls.setTarget(c);
+  }
+}
+
+function resetPivotUI() {
+  view.pivotMode = 'center';
+  pivotPoint = null;
+  $('pivot-select').value = 'center';
+  var opt = $('pivot-picked-option');
+  opt.disabled = true; opt.hidden = true; opt.textContent = 'Point choisi';
+  cancelPivotPick();
+}
+
+function startPivotPick() {
+  if (!currentMesh) { toast('Aucun maillage charge', true); return; }
+  pickingPivot = true;
+  $('pivot-pick').classList.add('active');
+  $('view').style.cursor = 'crosshair';
+}
+
+function cancelPivotPick() {
+  pickingPivot = false;
+  $('pivot-pick').classList.remove('active');
+  $('view').style.cursor = '';
+}
+
+// Cree a la demande : ce script tourne aussi dans le worker, ou THREE n'existe pas.
+var pivotRaycaster = null;
+function pickPivotAt(clientX, clientY) {
+  if (!currentMesh) { toast('Aucun maillage charge', true); return; }
+  if (!pivotRaycaster) pivotRaycaster = new THREE.Raycaster();
+  var rect = $('view').getBoundingClientRect();
+  var ndc = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
+  );
+  pivotRaycaster.setFromCamera(ndc, activeCamera);
+  var hits = pivotRaycaster.intersectObjects(currentModels.map(function (model) { return model.mesh; }), false);
+  cancelPivotPick();
+  if (!hits.length) { toast('Aucun point du maillage sous le curseur', true); return; }
+  pivotPoint = hits[0].point.clone();
+  view.pivotMode = 'picked';
+  $('pivot-select').value = 'picked';
+  var opt = $('pivot-picked-option');
+  opt.disabled = false; opt.hidden = false;
+  opt.textContent = 'Point choisi (' + fmt(pivotPoint.x) + ', ' + fmt(pivotPoint.y) + ', ' + fmt(pivotPoint.z) + ')';
+  applyPivot();
 }
 
 /* ---------------------------------------------------------------- [7] --- */
@@ -2012,22 +2464,247 @@ function applyClip() {
 // est asynchrone. On adopte le contrat async/await maintenant pour ne pas
 // recabler toute la chaine plus tard (cf. CLAUDE.md piege 2).
 var loading = false;
+var restoringSession = false;
+var saveSessionTimer = null;
+var SESSION_DB = 'exhibit-session';
+var SESSION_STORE = 'state';
 
-async function loadFile(file) {
-  var ext = file.name.split('.').pop().toLowerCase();
-  if (SUPPORTED_EXT.indexOf(ext) < 0) {
-    toast('Format non gere en v0.1 : .' + ext, true);
+function openSessionDB() {
+  return new Promise(function (resolve, reject) {
+    if (!window.indexedDB) { reject(new Error('IndexedDB indisponible')); return; }
+    var req = indexedDB.open(SESSION_DB, 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore(SESSION_STORE); };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
+  });
+}
+
+function idbGet(key) {
+  return openSessionDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(SESSION_STORE, 'readonly');
+      var req = tx.objectStore(SESSION_STORE).get(key);
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+      tx.oncomplete = function () { db.close(); };
+    });
+  });
+}
+
+function idbPut(key, value) {
+  return openSessionDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(SESSION_STORE, 'readwrite');
+      tx.objectStore(SESSION_STORE).put(value, key);
+      tx.oncomplete = function () { db.close(); resolve(); };
+      tx.onerror = function () { db.close(); reject(tx.error); };
+    });
+  });
+}
+
+function buildSessionState() {
+  return {
+    version: 1,
+    savedAt: Date.now(),
+    view: {
+      matColor: colorHex(view.matColor), showEdges: view.showEdges,
+      showGrid: view.showGrid, gridColor: view.gridColor, gridPlane: view.gridPlane,
+      customBg: view.customBg, bgColor: view.bgColor
+    },
+    models: currentModels.map(function (model) {
+      return {
+        name: model.name, info: model.info, surf: model.surf,
+        color: colorHex(model.color), visible: model.visible !== false
+      };
+    })
+  };
+}
+
+function sessionTitle(state) {
+  var names = (state.models || []).map(function (model) { return model.name; });
+  return names.length === 1 ? names[0] : names.length + ' pieces';
+}
+
+function sessionSubtitle(state) {
+  var date = new Date(state.savedAt || Date.now()).toLocaleString('fr-FR');
+  var names = (state.models || []).map(function (model) { return model.name; }).join(', ');
+  return date + (names ? ' - ' + names : '');
+}
+
+async function loadSavedSessions() {
+  try {
+    return await idbGet('savedSessions') || [];
+  } catch (err) {
+    if (window.console) console.warn('Lecture des sauvegardes impossible : ' + err.message);
+    return [];
+  }
+}
+
+async function populateSavedSessions(savedList) {
+  var list = $('saved-sessions');
+  if (!list) return;
+  var saved = savedList || await loadSavedSessions();
+  list.innerHTML = '';
+  if (!saved.length) {
+    var emptyRow = document.createElement('div');
+    emptyRow.className = 'row';
+    var emptyText = document.createElement('div');
+    emptyText.className = 'row-text';
+    var sub = document.createElement('span');
+    sub.className = 'row-sub';
+    sub.textContent = 'Aucune sauvegarde';
+    emptyText.appendChild(sub);
+    emptyRow.appendChild(emptyText);
+    list.appendChild(emptyRow);
     return;
   }
+  saved.forEach(function (state) {
+    var row = document.createElement('div');
+    row.className = 'row session-row';
+    var text = document.createElement('div');
+    text.className = 'row-text';
+    var title = document.createElement('span');
+    title.className = 'row-title';
+    title.textContent = sessionTitle(state);
+    var sub = document.createElement('span');
+    sub.className = 'row-sub';
+    sub.textContent = sessionSubtitle(state);
+    text.appendChild(title);
+    text.appendChild(sub);
+    row.appendChild(text);
+
+    var actions = document.createElement('div');
+    actions.className = 'session-actions';
+    var restore = document.createElement('button');
+    restore.type = 'button';
+    restore.textContent = 'Restaurer';
+    restore.addEventListener('click', function () { restoreSavedState(state, true); });
+    actions.appendChild(restore);
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'Supprimer';
+    remove.addEventListener('click', async function () {
+      var all = await loadSavedSessions();
+      all = all.filter(function (s) { return s.id !== state.id; });
+      await idbPut('savedSessions', all);
+      populateSavedSessions(all);
+      toast('Sauvegarde supprimee');
+    });
+    actions.appendChild(remove);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+function scheduleSaveSession() {
+  if (restoringSession) return;
+  clearTimeout(saveSessionTimer);
+  saveSessionTimer = setTimeout(saveSession, 250);
+}
+
+async function saveSession(showToast) {
+  if (restoringSession) return;
+  try {
+    var state = buildSessionState();
+    await idbPut('session', state);
+    if (showToast) {
+      if (!state.models.length) { toast('Aucune piece a sauvegarder', true); return; }
+      state.id = Date.now().toString(36);
+      var saved = await loadSavedSessions();
+      saved.unshift(state);
+      saved = saved.slice(0, 12);
+      await idbPut('savedSessions', saved);
+      populateSavedSessions(saved);
+      toast('Sauvegarde ajoutee');
+    }
+  } catch (err) {
+    if (showToast) toast('Sauvegarde locale impossible', true);
+    if (window.console) console.warn('Sauvegarde locale impossible : ' + err.message);
+  }
+}
+
+function applySavedView(saved) {
+  if (!saved) return;
+  if (saved.matColor) view.matColor = saved.matColor;
+  if (typeof saved.showEdges === 'boolean') view.showEdges = saved.showEdges;
+  if (typeof saved.showGrid === 'boolean') view.showGrid = saved.showGrid;
+  if (saved.gridColor) view.gridColor = saved.gridColor;
+  if (saved.gridPlane) view.gridPlane = saved.gridPlane;
+  if (typeof saved.customBg === 'boolean') view.customBg = saved.customBg;
+  if (saved.bgColor) view.bgColor = saved.bgColor;
+  $('edges-switch').checked = view.showEdges;
+  $('grid-switch').checked = view.showGrid;
+  $('grid-plane-select').value = view.gridPlane;
+  $('bg-switch').checked = view.customBg;
+  refreshFixedPalettes();
+}
+
+function restoreSavedState(saved, manual) {
+  if (!saved || !saved.models || !saved.models.length) return;
+  restoringSession = true;
+  clearModels();
+  resetModelUI();
+  applySavedView(saved.view);
+  saved.models.forEach(function (model) {
+    showMesh(model.surf, model.name, model.info, true, {
+      color: model.color, visible: model.visible
+    });
+  });
+  refreshModelScene(true);
+  restoringSession = false;
+  saveSession(false);
+  toast((saved.models || []).length + ' piece(s) restauree(s)');
+  if (manual) scheduleSaveSession();
+}
+
+async function restoreSession() {
+  try {
+    populateSavedSessions();
+    var saved = await idbGet('session');
+    if (!saved || !saved.models || !saved.models.length) return;
+    restoreSavedState(saved, false);
+  } catch (err) {
+    if (window.console) console.warn('Restauration locale impossible : ' + err.message);
+  }
+}
+
+async function loadFile(file) {
+  return loadFiles([file]);
+}
+
+async function loadFiles(files) {
+  files = Array.prototype.slice.call(files || []).filter(function (file) {
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (SUPPORTED_EXT.indexOf(ext) < 0) {
+      toast('Format non gere en v0.1 : .' + ext, true);
+      return false;
+    }
+    return true;
+  });
+  if (!files.length) return;
   if (loading) { toast('Un chargement est deja en cours', true); return; }
+
   loading = true;
   setBusy(true);
+
   try {
-    var res = await prepareMeshAsync(file, ext);
-    if (res.info.nCells === 0) { toast('Aucune cellule lue', true); return; }
-    showProgress('Construction de la geometrie', 1);
-    showMesh(res.surf, file.name, res.info);
-    toast(file.name + ' charge');
+    var loadedCount = 0;
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      var ext = file.name.split('.').pop().toLowerCase();
+      showProgress('Lecture ' + (i + 1) + '/' + files.length + ' : ' + file.name, 0.02);
+      var res = await prepareMeshAsync(file, ext);
+      if (res.info.nCells === 0) { toast(file.name + ' : aucune cellule lue', true); continue; }
+      showProgress('Construction de la geometrie ' + (i + 1) + '/' + files.length, 1);
+      showMesh(res.surf, file.name, res.info, true);
+      loadedCount++;
+    }
+    if (loadedCount) {
+      toast(loadedCount === 1 ? files[0].name + ' ajoute' : loadedCount + ' fichiers ajoutes');
+      scheduleSaveSession();
+    } else if (!currentModels.length) {
+      resetModelUI();
+    }
   } catch (err) {
     toast('Erreur de lecture : ' + err.message, true);
     if (window.console) console.error(err);
@@ -2040,7 +2717,7 @@ async function loadFile(file) {
 function initUI() {
   $('open').addEventListener('click', function () { $('file').click(); });
   $('file').addEventListener('change', function (e) {
-    if (e.target.files[0]) loadFile(e.target.files[0]);
+    if (e.target.files.length) loadFiles(e.target.files);
     e.target.value = '';
   });
   $('new-file').addEventListener('click', closeModel);
@@ -2056,7 +2733,28 @@ function initUI() {
   });
   vp.addEventListener('drop', function (e) {
     e.preventDefault(); depth = 0; vp.classList.remove('drag');
-    if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
+  });
+
+  // Point de rotation (B9) : le clic suivant un armement de "pivot-pick"
+  // pointe le pivot sur le maillage, sans interferer avec l'orbite (Controls
+  // ecoute pointerdown/move/up, pas click).
+  $('view').addEventListener('click', function (e) {
+    if (!pickingPivot) return;
+    pickPivotAt(e.clientX, e.clientY);
+  });
+  $('view').addEventListener('dblclick', function (e) {
+    e.preventDefault();
+    pickPivotAt(e.clientX, e.clientY);
+  });
+  $('pivot-select').addEventListener('change', function (e) {
+    if (e.target.value === 'picked' && !pivotPoint) { startPivotPick(); return; }
+    view.pivotMode = e.target.value;
+    applyPivot();
+  });
+  $('pivot-pick').addEventListener('click', function () {
+    if (pickingPivot) cancelPivotPick();
+    else startPivotPick();
   });
 
   $('theme').addEventListener('click', function () {
@@ -2068,7 +2766,7 @@ function initUI() {
   window.addEventListener('keydown', function (e) {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === 'r' || e.key === 'R') {
-      if (currentMesh) { controls.frame(currentMesh.geometry.boundingBox); }
+      if (currentMesh) { controls.frame(sceneModelsBox()); resetPivotUI(); }
     } else if (e.key === 'o' || e.key === 'O') {
       $('file').click();
     } else if (e.key === 'n' || e.key === 'N') {
@@ -2083,6 +2781,8 @@ function initUI() {
       var cs = $('clip-select');
       cs.value = cs.value ? '' : 'x';
       cs.dispatchEvent(new Event('change'));
+    } else if (e.key === 'Escape') {
+      if (pickingPivot) cancelPivotPick();
     } else if (e.key === 'F11') {
       e.preventDefault();
       if (document.fullscreenElement) document.exitFullscreen();
@@ -2147,16 +2847,12 @@ function initSidebar() {
 
   bindSwitch('edges-switch', view.showEdges, function (v) {
     view.showEdges = v;
-    if (edges) edges.visible = v;
+    currentModels.forEach(function (model) { if (model.edges) model.edges.visible = v; });
     render();
+    scheduleSaveSession();
   });
 
-  $('model-color').value = '#' + new THREE.Color(view.matColor).getHexString();
-  $('model-color').addEventListener('input', function (e) {
-    view.matColor = e.target.value;
-    applyMaterial();
-    render();
-  });
+  refreshFixedPalettes();
 
   bindSpin('rough-minus', 'rough-plus', 'rough-value', 0, 1, 0.05, 2,
     view.matRoughness, function (v) { view.matRoughness = v; applyMaterial(); });
@@ -2167,30 +2863,23 @@ function initSidebar() {
     view.showGrid = v;
     if (grid) grid.visible = v;
     render();
-  });
-  $('grid-color').value = view.gridColor;
-  $('grid-color').addEventListener('input', function (e) {
-    view.gridColor = e.target.value;
-    if (lastGridBox) setGrid(lastGridBox);
-    render();
+    scheduleSaveSession();
   });
   $('grid-plane-select').value = view.gridPlane;
   $('grid-plane-select').addEventListener('change', function (e) {
     view.gridPlane = e.target.value;
     if (lastGridBox) setGrid(lastGridBox);
     render();
+    scheduleSaveSession();
   });
 
   bindSwitch('bg-switch', view.customBg, function (v) {
     view.customBg = v;
-    $('bg-color').disabled = !v;
+    refreshFixedPalettes();
     render();
+    scheduleSaveSession();
   });
-  $('bg-color').value = view.bgColor;
-  $('bg-color').addEventListener('input', function (e) {
-    view.bgColor = e.target.value;
-    render();
-  });
+  $('save-session').addEventListener('click', function () { saveSession(true); });
 
   bindSwitch('ortho-switch', view.ortho, function (v) { setCameraMode(v); });
 
@@ -2441,6 +3130,11 @@ if (typeof document !== 'undefined') {
   initUI();
   initSidebar();
   render();
+  restoreSession().then(function () {
+    var boot = $('boot');
+    boot.classList.add('hide');
+    setTimeout(function () { boot.remove(); }, 300);
+  });
 }
 
 /* Contexte worker : pas de document, mais importScripts existe (absent sous
